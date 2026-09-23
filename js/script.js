@@ -55,7 +55,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
     var atual = 0;
     var INTERVALO = 5000; // 5 segundos
+    var ESPERA_SEGURANCA = 9000; // se ficar pausado sem motivo aparente, retoma sozinho
     var temporizador = null;
+    var segurancaTimeout = null;
+    var podeHover = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
     var reduzMovimento = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
     function irPara(indice) {
@@ -69,6 +72,7 @@ document.addEventListener('DOMContentLoaded', function () {
     function seguinte() { irPara(atual + 1); }
 
     function iniciar() {
+      if (segurancaTimeout) { clearTimeout(segurancaTimeout); segurancaTimeout = null; }
       if (reduzMovimento) return;
       parar();
       temporizador = setInterval(seguinte, INTERVALO);
@@ -76,15 +80,28 @@ document.addEventListener('DOMContentLoaded', function () {
     function parar() {
       if (temporizador) { clearInterval(temporizador); temporizador = null; }
     }
+    // Pausa temporária (rato em cima / foco num link lá dentro). Ao fim de
+    // ESPERA_SEGURANCA retoma sozinho mesmo que o evento que devia reativar
+    // o carrossel não chegue a disparar — por exemplo, num telemóvel, tocar
+    // num link dentro do destaque (ex.: "Ver todas as viaturas") foca esse
+    // link e desloca a página, mas o "desfocar" muitas vezes não dispara,
+    // o que deixava o carrossel parado para sempre.
+    function pausarTemporariamente() {
+      parar();
+      if (segurancaTimeout) clearTimeout(segurancaTimeout);
+      segurancaTimeout = setTimeout(iniciar, ESPERA_SEGURANCA);
+    }
 
     pontos.forEach(function (btn, i) {
       btn.addEventListener('click', function () { irPara(i); iniciar(); });
     });
 
-    // pausa ao passar o rato / focar, retoma ao sair
-    raiz.addEventListener('mouseenter', parar);
-    raiz.addEventListener('mouseleave', iniciar);
-    raiz.addEventListener('focusin', parar);
+    // pausa ao passar o rato (só em dispositivos com rato real) / ao focar, retoma ao sair
+    if (podeHover) {
+      raiz.addEventListener('mouseenter', pausarTemporariamente);
+      raiz.addEventListener('mouseleave', iniciar);
+    }
+    raiz.addEventListener('focusin', pausarTemporariamente);
     raiz.addEventListener('focusout', iniciar);
 
     // pausa quando a aba não está visível, para não gastar recursos
